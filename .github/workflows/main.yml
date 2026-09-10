@@ -17,13 +17,26 @@ jobs:
       - name: Extract project ZIP
         run: |
           mkdir project
-          unzip -q tuktuk-meter-GPS-final.zip -d project
+          unzip -q tuktuk2-meter-GPS-build-ready.zip -d project
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Create debug keystore
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore project/debug.keystore \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
