@@ -14,40 +14,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find and extract project ZIP
+      - name: Extract project ZIP
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No ZIP file found in repository."
-            exit 1
-          fi
-
-          echo "Using ZIP file: $ZIP_FILE"
-
           mkdir project
-          unzip -q "$ZIP_FILE" -d project
-
-      - name: Detect project folder
-        run: |
-          if [ -f "project/settings.gradle.kts" ]; then
-            echo "PROJECT_DIR=project" >> "$GITHUB_ENV"
-          elif [ -f "project/*/settings.gradle.kts" ]; then
-            PROJECT_DIR=$(find project -maxdepth 2 -name "settings.gradle.kts" -print -quit | xargs dirname)
-            echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          else
-            SETTINGS=$(find project -maxdepth 3 -name "settings.gradle.kts" -print -quit)
-
-            if [ -z "$SETTINGS" ]; then
-              echo "ERROR: Android project not found."
-              exit 1
-            fi
-
-            PROJECT_DIR=$(dirname "$SETTINGS")
-            echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          fi
-
-          echo "Project directory: $PROJECT_DIR"
+          unzip -q tuktuk-meter-GPS-waiting-update.zip -d project
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -59,7 +29,7 @@ jobs:
         run: |
           keytool -genkeypair \
             -v \
-            -keystore "$PROJECT_DIR/debug.keystore" \
+            -keystore project/debug.keystore \
             -storepass android \
             -keypass android \
             -alias androiddebugkey \
@@ -75,17 +45,12 @@ jobs:
 
       - name: Build APK
         run: |
-          cd "$PROJECT_DIR"
+          cd project
           gradle clean assembleDebug --stacktrace
-
-      - name: Find APK
-        run: |
-          echo "APK files:"
-          find "$PROJECT_DIR" -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TuktukMeter-GPS-APK
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          name: TuktukMeter-GPS-Waiting-Update
+          path: project/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
