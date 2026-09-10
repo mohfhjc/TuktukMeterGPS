@@ -14,10 +14,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract project ZIP
+      - name: Find and extract project ZIP
         run: |
-          mkdir project
-          unzip -q tuktuk-meter-GPS-waiting-update.zip -d project
+          echo "Files in repository:"
+          ls -lah
+
+          ZIP_FILE=""
+
+          # ابحث أولاً عن نسخة تحديث الانتظار
+          if [ -f "tuktuk-meter-GPS-waiting-update.zip" ]; then
+            ZIP_FILE="tuktuk-meter-GPS-waiting-update.zip"
+
+          # ثم النسخة المعدلة السابقة
+          elif [ -f "tuktuk2-meter-GPS-build-ready.zip" ]; then
+            ZIP_FILE="tuktuk2-meter-GPS-build-ready.zip"
+
+          # ثم النسخة الأصلية
+          elif [ -f "tuktuk-meter-GPS-fixed.zip" ]; then
+            ZIP_FILE="tuktuk-meter-GPS-fixed.zip"
+
+          else
+            echo "ERROR: No project ZIP file found!"
+            echo "Available ZIP files:"
+            find . -maxdepth 1 -type f -name "*.zip" -print
+            exit 1
+          fi
+
+          echo "Using project: $ZIP_FILE"
+
+          mkdir -p project
+          unzip -q "$ZIP_FILE" -d project
+
+          echo "Project files:"
+          ls -lah project
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -47,6 +76,11 @@ jobs:
         run: |
           cd project
           gradle clean assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "APK files:"
+          find project -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
