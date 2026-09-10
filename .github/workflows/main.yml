@@ -17,12 +17,7 @@ jobs:
       - name: Extract project ZIP
         run: |
           mkdir project
-          unzip -q *.zip -d project
-
-      - name: Find Android project
-        run: |
-          echo "Searching for Gradle project..."
-          find project -name "gradlew" -type f -print
+          unzip -q tuktuk-meter-GPS-fixed.zip -d project
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -32,17 +27,16 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
       - name: Build APK
         run: |
-          GRADLEW=$(find project -name "gradlew" -type f | head -n 1)
-          chmod +x "$GRADLEW"
-          cd "$(dirname "$GRADLEW")"
-          ./gradlew assembleDebug --stacktrace
+          cd project
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TuktukMeterGPS-APK
-          path: |
-            project/**/build/outputs/apk/**/*.apk
+          path: project/app/build/outputs/apk/debug/*.apk
