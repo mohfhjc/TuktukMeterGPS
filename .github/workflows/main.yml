@@ -14,20 +14,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check update ZIP
+      - name: Find Waiting Update ZIP
         run: |
-          echo "ZIP files in repository:"
-          ls -lah *.zip || true
+          echo "ZIP files found:"
+          find . -maxdepth 1 -type f -iname "*.zip" -print
 
-          if [ ! -f "tuktuk-meter-GPS-waiting-update.zip" ]; then
-            echo "ERROR: tuktuk-meter-GPS-waiting-update.zip not found!"
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*waiting*update*.zip" -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Waiting update ZIP was not found."
             exit 1
           fi
 
-      - name: Extract waiting update
+          echo "Using ZIP: $ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+      - name: Extract Waiting Update
         run: |
           mkdir -p project
-          unzip -q tuktuk-meter-GPS-waiting-update.zip -d project
+          unzip -q "$ZIP_FILE" -d project
+
+          echo "Project contents:"
+          ls -lah project
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -35,7 +43,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Create debug keystore
+      - name: Create Debug Keystore
         run: |
           keytool -genkeypair \
             -v \
@@ -57,6 +65,11 @@ jobs:
         run: |
           cd project
           gradle clean assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "APK files:"
+          find project -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
