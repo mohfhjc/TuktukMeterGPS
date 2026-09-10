@@ -17,7 +17,7 @@ jobs:
       - name: Extract project ZIP
         run: |
           mkdir project
-          unzip -q tuktuk-meter-GPS-fixed.zip -d project
+          unzip -q tuktuk2-meter-GPS-build-ready.zip -d project
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -33,10 +33,10 @@ jobs:
       - name: Build APK
         run: |
           cd project
-          gradle assembleDebug --stacktrace
+          gradle clean assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TuktukMeterGPS-APK
+          name: TuktukMeter-GPS-APK
           path: project/app/build/outputs/apk/debug/*.apk
