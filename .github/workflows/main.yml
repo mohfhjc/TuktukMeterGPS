@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build PC Game Emulator APK
 
 on:
   workflow_dispatch:
@@ -35,29 +35,29 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
+      - name: Extract PC Game Emulator
+        run: |
+          mkdir -p pcgame
+          unzip -o "PCGameEmulator-Mobile-v1.zip" -d pcgame
+
       - name: Check Project
         run: |
-          echo "Current directory:"
-          pwd
-          echo "Project files:"
-          ls -la
-          echo "App directory:"
-          ls -la app
+          echo "PC Game Emulator files:"
+          find pcgame -maxdepth 3 -type f | sort
 
-      - name: Build Debug APK
+      - name: Build APK
+        working-directory: pcgame
         run: |
           gradle clean
           gradle assembleDebug --stacktrace
 
       - name: Find APK
-        if: success()
         run: |
           echo "APK files:"
-          find . -type f -name "*.apk" -print
+          find pcgame -type f -name "*.apk" -print
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: PCGameEmulator-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: pcgame/app/build/outputs/apk/debug/app-debug.apk
