@@ -40,10 +40,32 @@ jobs:
           mkdir -p pcgame
           unzip -o "PCGameEmulator-Mobile-v1.zip" -d pcgame
 
-      - name: Check Project
+      - name: Fix Java and Kotlin JVM Target
         run: |
-          echo "PC Game Emulator files:"
-          find pcgame -maxdepth 3 -type f | sort
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("pcgame/app/build.gradle")
+          text = p.read_text()
+
+          if "compileOptions" not in text:
+              text = text.replace(
+                  "    defaultConfig {",
+                  """    compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+
+              defaultConfig {"""
+              )
+
+          p.write_text(text)
+          print(p.read_text())
+          PY
 
       - name: Build APK
         working-directory: pcgame
@@ -53,7 +75,6 @@ jobs:
 
       - name: Find APK
         run: |
-          echo "APK files:"
           find pcgame -type f -name "*.apk" -print
 
       - name: Upload APK
