@@ -1,0 +1,101 @@
+name: Setup Game + Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "TukTukEscape-first-version.zip"
+
+permissions:
+  contents: write
+
+jobs:
+  setup-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: تحميل المشروع
+        uses: actions/checkout@v4
+
+      - name: فك ملف اللعبة تلقائيا
+        run: |
+          echo "فك ملف اللعبة..."
+
+          if [ ! -f "TukTukEscape-first-version.zip" ]; then
+            echo "ZIP file not found!"
+            exit 1
+          fi
+
+          unzip -o "TukTukEscape-first-version.zip" -d .
+
+          echo "تم فك الملفات."
+
+      - name: التأكد من وجود مشروع Godot
+        run: |
+          if [ ! -f "game/TukTukEscape/project.godot" ]; then
+            echo "Godot project not found!"
+            find . -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          echo "Godot project found."
+
+      - name: إنشاء Android export preset
+        run: |
+          cat > game/TukTukEscape/export_presets.cfg <<'EOF'
+          [gd_resource format=3]
+
+          [resource]
+          
+          [preset.0]
+          name="Android"
+          platform="Android"
+          runnable=true
+
+          [preset.0.options]
+          package/unique_name="com.mohfjc.tuktukescape"
+          package/name="TukTuk Escape"
+          package/signed=true
+          package/export_format=0
+          version/code=1
+          version/name="1.0"
+          architecture/arm64-v8a=true
+          architecture/armeabi-v7a=false
+          architecture/x86_64=false
+          package/retain_data_on_uninstall=false
+          package/exclude_from_recents=false
+          screen/immersive_mode=true
+          screen/orientation=1
+          EOF
+
+      - name: حفظ ملفات اللعبة في GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add game/TukTukEscape
+
+          if git diff --cached --quiet; then
+            echo "لا توجد ملفات جديدة للحفظ."
+          else
+            git commit -m "Install TukTuk Escape game"
+            git push
+          fi
+
+      - name: بناء APK
+        uses: abarichello/godot-ci@v4.6.3
+        with:
+          version: "4.6.3"
+          export: "Android"
+          project: "game/TukTukEscape"
+
+      - name: البحث عن APK
+        run: |
+          echo "ملفات APK:"
+          find game/TukTukEscape -type f -name "*.apk" -print
+
+      - name: رفع APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TukTukEscape-APK
+          path: game/TukTukEscape/*.apk
