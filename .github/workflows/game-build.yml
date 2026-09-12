@@ -25,50 +25,31 @@ jobs:
         run: |
           set -e
 
-          echo "=== Set HOME ==="
           export HOME=/root
-          echo "HOME=$HOME"
 
-          echo "=== Prepare Godot config ==="
+          echo "=== Preparing Godot ==="
+
           mkdir -p /root/.config/godot
           mkdir -p /root/.local/share/godot/export_templates
 
-          echo "=== Install export templates ==="
+          echo "=== Checking Java ==="
+          java -version
 
-          if [ -d "/root/.local/share/godot/templates/4.6.3.stable" ]; then
-            rm -rf "/root/.local/share/godot/export_templates/4.6.3.stable"
-            mv "/root/.local/share/godot/templates/4.6.3.stable" \
-               "/root/.local/share/godot/export_templates/4.6.3.stable"
-          fi
+          echo "=== Checking Android SDK ==="
+          ls -la /usr/lib/android-sdk
 
-          echo "=== Configure Android SDK ==="
+          echo "=== Checking Godot Templates ==="
+          find /root/.local/share/godot -maxdepth 4 -type f | head -100 || true
+
+          echo "=== Godot settings ==="
 
           SETTINGS="/root/.config/godot/editor_settings-4.6.tres"
 
-          touch "$SETTINGS"
-
-          sed -i '/export\/android\/java_sdk_path/d' "$SETTINGS" || true
-          sed -i '/export\/android\/android_sdk_path/d' "$SETTINGS" || true
-          sed -i '/export\/android\/debug_keystore/d' "$SETTINGS" || true
-          sed -i '/export\/android\/debug_keystore_user/d' "$SETTINGS" || true
-          sed -i '/export\/android\/debug_keystore_pass/d' "$SETTINGS" || true
-
-          cat >> "$SETTINGS" <<'EOF'
-          export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"
-          export/android/android_sdk_path = "/usr/lib/android-sdk"
-          export/android/debug_keystore = "/root/debug.keystore"
-          export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_pass = "android"
-          EOF
-
-          echo "=== Java ==="
-          java -version
-
-          echo "=== Android SDK ==="
-          ls -la /usr/lib/android-sdk
-
-          echo "=== Export templates ==="
-          ls -la /root/.local/share/godot/export_templates/ || true
+          if [ -f "$SETTINGS" ]; then
+            echo "Existing Godot settings found."
+          else
+            echo "Godot settings will be generated automatically."
+          fi
 
       - name: Extract Game
         shell: bash
@@ -78,7 +59,8 @@ jobs:
           mkdir -p game/TukTukEscape
 
           if [ -f "TukTukEscape-first-version.zip" ]; then
-            echo "Extracting game ZIP..."
+
+            echo "=== Extracting game ZIP ==="
 
             rm -rf /tmp/tuktuk
             mkdir -p /tmp/tuktuk
@@ -89,7 +71,11 @@ jobs:
               cp -rf /tmp/tuktuk/game/TukTukEscape/. game/TukTukEscape/
             elif [ -d "/tmp/tuktuk/TukTukEscape" ]; then
               cp -rf /tmp/tuktuk/TukTukEscape/. game/TukTukEscape/
+            else
+              echo "Game folder was not found inside ZIP."
+              exit 1
             fi
+
           fi
 
           echo "=== Game files ==="
@@ -101,6 +87,8 @@ jobs:
           set -e
 
           cd game/TukTukEscape
+
+          echo "=== Creating Android export preset ==="
 
           cat > export_presets.cfg <<'EOF'
           [preset.0]
@@ -127,8 +115,6 @@ jobs:
 
           gradle_build/use_gradle_build=false
           gradle_build/export_format=0
-          gradle_build/min_sdk="24"
-          gradle_build/target_sdk="33"
 
           architectures/armeabi-v7a=false
           architectures/arm64-v8a=true
@@ -182,10 +168,10 @@ jobs:
           one_click_deploy/clear_previous_install=false
           EOF
 
-          echo "=== Export preset ==="
+          echo "=== Export preset created ==="
           cat export_presets.cfg
 
-      - name: Validate Godot
+      - name: Validate Godot Project
         shell: bash
         run: |
           set -e
@@ -194,7 +180,13 @@ jobs:
 
           cd game/TukTukEscape
 
-          godot --headless --path . --editor --quit
+          echo "=== Validating Godot project ==="
+
+          godot \
+            --headless \
+            --path . \
+            --editor \
+            --quit
 
       - name: Build Android APK
         shell: bash
@@ -207,7 +199,7 @@ jobs:
 
           mkdir -p ../../build/android
 
-          echo "=== Starting Android export ==="
+          echo "=== Building Android APK ==="
 
           godot \
             --headless \
@@ -217,7 +209,8 @@ jobs:
             "Android Debug" \
             "../../build/android/TukTukEscape-debug.apk"
 
-          echo "=== APK created ==="
+          echo "=== APK build finished ==="
+
           ls -lh ../../build/android/
 
       - name: Check APK
@@ -225,11 +218,14 @@ jobs:
         run: |
           set -e
 
+          echo "=== Checking APK ==="
+
           if [ ! -f "build/android/TukTukEscape-debug.apk" ]; then
-            echo "APK was not created!"
+            echo "ERROR: APK was not created."
             exit 1
           fi
 
+          echo "APK successfully created:"
           ls -lh build/android/TukTukEscape-debug.apk
 
       - name: Upload APK
