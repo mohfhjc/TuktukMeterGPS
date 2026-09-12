@@ -23,31 +23,49 @@ jobs:
         with:
           lfs: true
 
-      - name: Setup Godot Android
+      - name: Setup Godot
         shell: bash
         run: |
           set -e
 
-          echo "=== Setup Godot ==="
+          echo "=== Setting up Godot ==="
 
-          mkdir -p ~/.config
-          mkdir -p ~/.local/share/godot/export_templates
+          mkdir -v -p ~/.local/share/godot/export_templates
+          mkdir -v -p ~/.config
 
-          rm -rf ~/.config/godot
-          cp -a /root/.config/godot ~/.config/godot
+          echo "=== Installing Godot configuration ==="
 
-          rm -rf ~/.local/share/godot/export_templates/4.6.3.stable
-          cp -a /root/.local/share/godot/export_templates/4.6.3.stable \
-            ~/.local/share/godot/export_templates/4.6.3.stable
+          if [ -d "/root/.config/godot" ]; then
+            rm -rf ~/.config/godot
+            cp -a /root/.config/godot ~/.config/godot
+          fi
+
+          echo "=== Installing Godot export templates ==="
+
+          if [ -d "/root/.local/share/godot/export_templates/4.6.3.stable" ]; then
+            rm -rf ~/.local/share/godot/export_templates/4.6.3.stable
+
+            cp -a \
+              /root/.local/share/godot/export_templates/4.6.3.stable \
+              ~/.local/share/godot/export_templates/4.6.3.stable
+          else
+            echo "ERROR: Godot 4.6.3 export templates were not found."
+            find /root/.local/share/godot -maxdepth 5 -type f | head -100
+            exit 1
+          fi
+
+          echo "=== Templates installed ==="
+
+          find ~/.local/share/godot/export_templates/4.6.3.stable \
+            -maxdepth 1 \
+            -type f \
+            -printf "%f\n"
 
           echo "=== Java ==="
           java -version
 
           echo "=== Android SDK ==="
           ls -la /usr/lib/android-sdk
-
-          echo "=== Templates ==="
-          ls -la ~/.local/share/godot/export_templates/4.6.3.stable
 
       - name: Extract Game
         shell: bash
@@ -65,20 +83,39 @@ jobs:
           rm -rf /tmp/tuktuk
           mkdir -p /tmp/tuktuk
 
-          unzip -o "TukTukEscape-first-version.zip" -d /tmp/tuktuk
+          unzip -o \
+            "TukTukEscape-first-version.zip" \
+            -d /tmp/tuktuk
 
           if [ -d "/tmp/tuktuk/game/TukTukEscape" ]; then
-            cp -a /tmp/tuktuk/game/TukTukEscape/. game/TukTukEscape/
+
+            cp -a \
+              /tmp/tuktuk/game/TukTukEscape/. \
+              game/TukTukEscape/
+
           elif [ -d "/tmp/tuktuk/TukTukEscape" ]; then
-            cp -a /tmp/tuktuk/TukTukEscape/. game/TukTukEscape/
+
+            cp -a \
+              /tmp/tuktuk/TukTukEscape/. \
+              game/TukTukEscape/
+
           else
-            echo "ERROR: TukTukEscape folder not found in ZIP."
-            find /tmp/tuktuk -maxdepth 4 -type f
+
+            echo "ERROR: TukTukEscape folder not found."
+
+            find /tmp/tuktuk \
+              -maxdepth 4 \
+              -type f
+
             exit 1
           fi
 
-          echo "=== Game ==="
-          find game/TukTukEscape -maxdepth 3 -type f | sort
+          echo "=== Game files ==="
+
+          find game/TukTukEscape \
+            -maxdepth 3 \
+            -type f \
+            | sort
 
       - name: Create Android Export Preset
         shell: bash
@@ -87,103 +124,97 @@ jobs:
 
           cd game/TukTukEscape
 
+          echo "=== Creating export_presets.cfg ==="
+
           cat > export_presets.cfg <<'EOF'
-          [preset.0]
+[preset.0]
 
-          name="Android Debug"
-          platform="Android"
-          runnable=true
-          dedicated_server=false
-          custom_features=""
-          export_filter="all_resources"
-          include_filter=""
-          exclude_filter=""
-          export_path=""
-          encryption_include_filters=""
-          encryption_exclude_filters=""
-          encrypt_pck=false
-          encrypt_directory=false
-          script_export_mode=2
+name="Android Debug"
+platform="Android"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path=""
+encryption_include_filters=""
+encryption_exclude_filters=""
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
 
-          [preset.0.options]
+[preset.0.options]
 
-          custom_template/debug=""
-          custom_template/release=""
+custom_template/debug=""
+custom_template/release=""
 
-          gradle_build/use_gradle_build=true
-          gradle_build/gradle_build_directory=""
-          gradle_build/android_source_template=""
-          gradle_build/compress_native_libraries=false
-          gradle_build/export_format=0
-          gradle_build/min_sdk="24"
-          gradle_build/target_sdk="33"
-          gradle_build/custom_theme_attributes={}
+gradle_build/use_gradle_build=false
+gradle_build/export_format=0
 
-          architectures/armeabi-v7a=false
-          architectures/arm64-v8a=true
-          architectures/x86=false
-          architectures/x86_64=false
+architectures/armeabi-v7a=false
+architectures/arm64-v8a=true
+architectures/x86=false
+architectures/x86_64=false
 
-          version/code=1
-          version/name="1.0"
+version/code=1
+version/name="1.0"
 
-          package/unique_name="com.mohfjc.tuktukescape"
-          package/name="TukTuk Escape"
-          package/signed=true
+package/unique_name="com.mohfjc.tuktukescape"
+package/name="TukTuk Escape"
+package/signed=true
 
-          package/app_category=2
-          package/retain_data_on_uninstall=false
-          package/exclude_from_recents=false
-          package/show_in_android_tv=false
-          package/show_in_app_library=true
-          package/show_as_launcher_app=true
+package/app_category=2
+package/retain_data_on_uninstall=false
+package/exclude_from_recents=false
+package/show_in_android_tv=false
+package/show_as_launcher_app=true
+package/show_in_app_library=true
 
-          launcher_icons/main_192x192=""
-          launcher_icons/adaptive_foreground_432x432=""
-          launcher_icons/adaptive_background_432x432=""
-          launcher_icons/adaptive_monochrome_432x432=""
+launcher_icons/main_192x192=""
+launcher_icons/adaptive_foreground_432x432=""
+launcher_icons/adaptive_background_432x432=""
 
-          graphics/opengl_debug=false
+graphics/opengl_debug=false
 
-          xr_features/xr_mode=0
+xr_features/xr_mode=0
 
-          screen/immersive_mode=true
-          screen/edge_to_edge=false
-          screen/support_small=true
-          screen/support_normal=true
-          screen/support_large=true
-          screen/support_xlarge=true
+screen/immersive_mode=true
+screen/support_small=true
+screen/support_normal=true
+screen/support_large=true
+screen/support_xlarge=true
 
-          user_data_backup/allow=false
+user_data_backup/allow=false
 
-          command_line/extra_args=""
+command_line/extra_args=""
 
-          apk_expansion/enable=false
-          apk_expansion/SALT=""
-          apk_expansion/public_key=""
+apk_expansion/enable=false
 
-          permissions/custom_permissions=PackedStringArray()
+permissions/custom_permissions=PackedStringArray()
 
-          keystore/debug="/root/debug.keystore"
-          keystore/debug_user="androiddebugkey"
-          keystore/debug_password="android"
+keystore/debug="/root/debug.keystore"
+keystore/debug_user="androiddebugkey"
+keystore/debug_password="android"
 
-          keystore/release=""
-          keystore/release_user=""
-          keystore/release_password=""
+keystore/release=""
+keystore/release_user=""
+keystore/release_password=""
 
-          one_click_deploy/clear_previous_install=false
-          EOF
+one_click_deploy/clear_previous_install=false
+EOF
 
           echo "=== Export preset ==="
           cat export_presets.cfg
 
-      - name: Validate Project
+      - name: Validate Godot
         shell: bash
         run: |
           set -e
 
           cd game/TukTukEscape
+
+          echo "=== Validating project ==="
 
           godot \
             --headless \
@@ -200,7 +231,7 @@ jobs:
 
           mkdir -p ../../build/android
 
-          echo "=== BUILDING APK ==="
+          echo "=== BUILDING ANDROID APK ==="
 
           godot \
             --headless \
@@ -210,7 +241,7 @@ jobs:
             "Android Debug" \
             "../../build/android/TukTukEscape-debug.apk"
 
-          echo "=== BUILD COMPLETE ==="
+          echo "=== BUILD FINISHED ==="
 
           ls -lh ../../build/android/
 
@@ -219,12 +250,14 @@ jobs:
         run: |
           set -e
 
+          echo "=== CHECKING APK ==="
+
           if [ ! -f "build/android/TukTukEscape-debug.apk" ]; then
             echo "ERROR: APK was not created."
             exit 1
           fi
 
-          echo "APK SUCCESS:"
+          echo "SUCCESS!"
           ls -lh build/android/TukTukEscape-debug.apk
 
       - name: Upload APK
