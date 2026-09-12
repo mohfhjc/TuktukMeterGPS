@@ -1,0 +1,30 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "game/TukTukEscape/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Godot Android APK
+        uses: barichello/godot-ci@v4.5.1
+        with:
+          version: "4.5.1"
+          export: "Android"
+          project: "game/TukTukEscape"
+
+      - name: Find APK
+        run: find game/TukTukEscape -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TukTukEscape-APK
+          path: game/TukTukEscape/*.apk
