@@ -11,91 +11,210 @@ permissions:
 
 jobs:
   setup-and-build:
+
     runs-on: ubuntu-latest
 
-    steps:
-      - name: تحميل المشروع
-        uses: actions/checkout@v4
+    container:
+      image: barichello/godot-ci:4.6.3
 
-      - name: فك ملف اللعبة تلقائيا
+    steps:
+
+      # =========================
+      # 1 - تحميل المستودع
+      # =========================
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # =========================
+      # 2 - تثبيت أدوات فك الضغط
+      # =========================
+      - name: Install unzip
         run: |
-          echo "فك ملف اللعبة..."
+          apt-get update
+          apt-get install -y unzip git
+
+      # =========================
+      # 3 - فك ZIP تلقائياً
+      # =========================
+      - name: Extract Game ZIP
+        run: |
+          echo "Extracting game..."
 
           if [ ! -f "TukTukEscape-first-version.zip" ]; then
-            echo "ZIP file not found!"
+            echo "ERROR: ZIP file not found"
             exit 1
           fi
 
-          unzip -o "TukTukEscape-first-version.zip" -d .
+          rm -rf game/TukTukEscape
 
-          echo "تم فك الملفات."
+          mkdir -p game
 
-      - name: التأكد من وجود مشروع Godot
+          unzip -o "TukTukEscape-first-version.zip" -d /tmp/tuktuk_game
+
+          if [ -d "/tmp/tuktuk_game/game/TukTukEscape" ]; then
+            cp -r /tmp/tuktuk_game/game/TukTukEscape game/
+          elif [ -d "/tmp/tuktuk_game/TukTukEscape" ]; then
+            cp -r /tmp/tuktuk_game/TukTukEscape game/
+          else
+            echo "ERROR: TukTukEscape folder was not found"
+            find /tmp/tuktuk_game -maxdepth 4 -type f
+            exit 1
+          fi
+
+          echo "Game extracted successfully."
+
+      # =========================
+      # 4 - فحص المشروع
+      # =========================
+      - name: Check Godot Project
         run: |
+
           if [ ! -f "game/TukTukEscape/project.godot" ]; then
-            echo "Godot project not found!"
-            find . -maxdepth 4 -type f | head -100
+            echo "ERROR: project.godot not found"
+            find game -maxdepth 5 -type f
             exit 1
           fi
 
-          echo "Godot project found."
+          if [ ! -f "game/TukTukEscape/Main.tscn" ]; then
+            echo "ERROR: Main.tscn not found"
+            exit 1
+          fi
 
-      - name: إنشاء Android export preset
+          if [ ! -f "game/TukTukEscape/scripts/main.gd" ]; then
+            echo "ERROR: main.gd not found"
+            exit 1
+          fi
+
+          echo "Godot project OK."
+
+      # =========================
+      # 5 - إعداد Godot Android
+      # =========================
+      - name: Setup Godot Android
         run: |
-          cat > game/TukTukEscape/export_presets.cfg <<'EOF'
-          [gd_resource format=3]
 
-          [resource]
-          
+          mkdir -p ~/.config/godot
+
+          if [ -f "/root/.config/godot/editor_settings-4.6.tres" ]; then
+            cp /root/.config/godot/editor_settings-4.6.tres \
+              ~/.config/godot/editor_settings-4.6.tres
+          fi
+
+          echo "Android environment ready."
+
+      # =========================
+      # 6 - إنشاء Export Preset
+      # =========================
+      - name: Create Android Export Preset
+        run: |
+
+          cat > game/TukTukEscape/export_presets.cfg <<'EOF'
+
           [preset.0]
+
           name="Android"
           platform="Android"
           runnable=true
 
           [preset.0.options]
+
           package/unique_name="com.mohfjc.tuktukescape"
           package/name="TukTuk Escape"
-          package/signed=true
-          package/export_format=0
+
           version/code=1
           version/name="1.0"
+
+          screen/orientation=1
+
           architecture/arm64-v8a=true
           architecture/armeabi-v7a=false
           architecture/x86_64=false
+
           package/retain_data_on_uninstall=false
           package/exclude_from_recents=false
-          screen/immersive_mode=true
-          screen/orientation=1
+
           EOF
 
-      - name: حفظ ملفات اللعبة في GitHub
+          echo "Export preset created."
+
+      # =========================
+      # 7 - فحص Godot
+      # =========================
+      - name: Check Godot
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          godot --version
+
+          cd game/TukTukEscape
+
+          godot \
+            --headless \
+            --path . \
+            --editor \
+            --quit
+
+      # =========================
+      # 8 - حفظ اللعبة في GitHub
+      # =========================
+      - name: Save Game Files
+        run: |
+
+          git config --global user.name "github-actions[bot]"
+
+          git config --global user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add game/TukTukEscape
 
           if git diff --cached --quiet; then
-            echo "لا توجد ملفات جديدة للحفظ."
+            echo "No changes to commit."
           else
-            git commit -m "Install TukTuk Escape game"
+            git commit -m "Add TukTuk Escape game"
             git push
           fi
 
-      - name: بناء APK
-        uses: abarichello/godot-ci@v4.6.3
-        with:
-          version: "4.6.3"
-          export: "Android"
-          project: "game/TukTukEscape"
-
-      - name: البحث عن APK
+      # =========================
+      # 9 - بناء APK
+      # =========================
+      - name: Build Android APK
         run: |
-          echo "ملفات APK:"
-          find game/TukTukEscape -type f -name "*.apk" -print
 
-      - name: رفع APK
+          mkdir -p build/android
+
+          cd game/TukTukEscape
+
+          godot \
+            --headless \
+            --verbose \
+            --export-debug \
+            "Android" \
+            "../../build/android/TukTukEscape-debug.apk"
+
+      # =========================
+      # 10 - التأكد من APK
+      # =========================
+      - name: Check APK
+        run: |
+
+          echo "Searching for APK..."
+
+          find build -type f -name "*.apk" -print
+
+          if ! find build -type f -name "*.apk" | grep -q ".apk"; then
+            echo "ERROR: APK was not created."
+            exit 1
+          fi
+
+          echo "APK successfully created."
+
+      # =========================
+      # 11 - رفع APK
+      # =========================
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TukTukEscape-APK
-          path: game/TukTukEscape/*.apk
+          path: build/android/TukTukEscape-debug.apk
+          retention-days: 14
