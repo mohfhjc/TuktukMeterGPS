@@ -10,7 +10,8 @@ on:
 
 jobs:
   setup-and-build:
-    runs-on: ubuntu-latest
+
+    runs-on: ubuntu-24.04
 
     container:
       image: barichello/godot-ci:4.6.3
@@ -19,76 +20,72 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      - name: Prepare Godot Android
+      - name: Setup Godot Android
         shell: bash
         run: |
           set -e
 
-          export HOME=/root
+          echo "=== Setup Godot ==="
 
-          echo "=== Preparing Godot ==="
+          mkdir -p ~/.config
+          mkdir -p ~/.local/share/godot/export_templates
 
-          mkdir -p /root/.config/godot
-          mkdir -p /root/.local/share/godot/export_templates
+          rm -rf ~/.config/godot
+          cp -a /root/.config/godot ~/.config/godot
 
-          echo "=== Checking Java ==="
+          rm -rf ~/.local/share/godot/export_templates/4.6.3.stable
+          cp -a /root/.local/share/godot/export_templates/4.6.3.stable \
+            ~/.local/share/godot/export_templates/4.6.3.stable
+
+          echo "=== Java ==="
           java -version
 
-          echo "=== Checking Android SDK ==="
+          echo "=== Android SDK ==="
           ls -la /usr/lib/android-sdk
 
-          echo "=== Checking Godot Templates ==="
-          find /root/.local/share/godot -maxdepth 4 -type f | head -100 || true
-
-          echo "=== Godot settings ==="
-
-          SETTINGS="/root/.config/godot/editor_settings-4.6.tres"
-
-          if [ -f "$SETTINGS" ]; then
-            echo "Existing Godot settings found."
-          else
-            echo "Godot settings will be generated automatically."
-          fi
+          echo "=== Templates ==="
+          ls -la ~/.local/share/godot/export_templates/4.6.3.stable
 
       - name: Extract Game
         shell: bash
         run: |
           set -e
 
+          rm -rf game/TukTukEscape
           mkdir -p game/TukTukEscape
 
-          if [ -f "TukTukEscape-first-version.zip" ]; then
-
-            echo "=== Extracting game ZIP ==="
-
-            rm -rf /tmp/tuktuk
-            mkdir -p /tmp/tuktuk
-
-            unzip -o "TukTukEscape-first-version.zip" -d /tmp/tuktuk
-
-            if [ -d "/tmp/tuktuk/game/TukTukEscape" ]; then
-              cp -rf /tmp/tuktuk/game/TukTukEscape/. game/TukTukEscape/
-            elif [ -d "/tmp/tuktuk/TukTukEscape" ]; then
-              cp -rf /tmp/tuktuk/TukTukEscape/. game/TukTukEscape/
-            else
-              echo "Game folder was not found inside ZIP."
-              exit 1
-            fi
-
+          if [ ! -f "TukTukEscape-first-version.zip" ]; then
+            echo "ERROR: TukTukEscape-first-version.zip not found."
+            exit 1
           fi
 
-          echo "=== Game files ==="
+          rm -rf /tmp/tuktuk
+          mkdir -p /tmp/tuktuk
+
+          unzip -o "TukTukEscape-first-version.zip" -d /tmp/tuktuk
+
+          if [ -d "/tmp/tuktuk/game/TukTukEscape" ]; then
+            cp -a /tmp/tuktuk/game/TukTukEscape/. game/TukTukEscape/
+          elif [ -d "/tmp/tuktuk/TukTukEscape" ]; then
+            cp -a /tmp/tuktuk/TukTukEscape/. game/TukTukEscape/
+          else
+            echo "ERROR: TukTukEscape folder not found in ZIP."
+            find /tmp/tuktuk -maxdepth 4 -type f
+            exit 1
+          fi
+
+          echo "=== Game ==="
           find game/TukTukEscape -maxdepth 3 -type f | sort
 
-      - name: Configure Export Preset
+      - name: Create Android Export Preset
         shell: bash
         run: |
           set -e
 
           cd game/TukTukEscape
-
-          echo "=== Creating Android export preset ==="
 
           cat > export_presets.cfg <<'EOF'
           [preset.0]
@@ -113,8 +110,14 @@ jobs:
           custom_template/debug=""
           custom_template/release=""
 
-          gradle_build/use_gradle_build=false
+          gradle_build/use_gradle_build=true
+          gradle_build/gradle_build_directory=""
+          gradle_build/android_source_template=""
+          gradle_build/compress_native_libraries=false
           gradle_build/export_format=0
+          gradle_build/min_sdk="24"
+          gradle_build/target_sdk="33"
+          gradle_build/custom_theme_attributes={}
 
           architectures/armeabi-v7a=false
           architectures/arm64-v8a=true
@@ -132,18 +135,20 @@ jobs:
           package/retain_data_on_uninstall=false
           package/exclude_from_recents=false
           package/show_in_android_tv=false
-          package/show_as_launcher_app=true
           package/show_in_app_library=true
+          package/show_as_launcher_app=true
 
           launcher_icons/main_192x192=""
           launcher_icons/adaptive_foreground_432x432=""
           launcher_icons/adaptive_background_432x432=""
+          launcher_icons/adaptive_monochrome_432x432=""
 
           graphics/opengl_debug=false
 
           xr_features/xr_mode=0
 
           screen/immersive_mode=true
+          screen/edge_to_edge=false
           screen/support_small=true
           screen/support_normal=true
           screen/support_large=true
@@ -154,6 +159,8 @@ jobs:
           command_line/extra_args=""
 
           apk_expansion/enable=false
+          apk_expansion/SALT=""
+          apk_expansion/public_key=""
 
           permissions/custom_permissions=PackedStringArray()
 
@@ -168,19 +175,15 @@ jobs:
           one_click_deploy/clear_previous_install=false
           EOF
 
-          echo "=== Export preset created ==="
+          echo "=== Export preset ==="
           cat export_presets.cfg
 
-      - name: Validate Godot Project
+      - name: Validate Project
         shell: bash
         run: |
           set -e
 
-          export HOME=/root
-
           cd game/TukTukEscape
-
-          echo "=== Validating Godot project ==="
 
           godot \
             --headless \
@@ -193,13 +196,11 @@ jobs:
         run: |
           set -e
 
-          export HOME=/root
-
           cd game/TukTukEscape
 
           mkdir -p ../../build/android
 
-          echo "=== Building Android APK ==="
+          echo "=== BUILDING APK ==="
 
           godot \
             --headless \
@@ -209,7 +210,7 @@ jobs:
             "Android Debug" \
             "../../build/android/TukTukEscape-debug.apk"
 
-          echo "=== APK build finished ==="
+          echo "=== BUILD COMPLETE ==="
 
           ls -lh ../../build/android/
 
@@ -218,14 +219,12 @@ jobs:
         run: |
           set -e
 
-          echo "=== Checking APK ==="
-
           if [ ! -f "build/android/TukTukEscape-debug.apk" ]; then
             echo "ERROR: APK was not created."
             exit 1
           fi
 
-          echo "APK successfully created:"
+          echo "APK SUCCESS:"
           ls -lh build/android/TukTukEscape-debug.apk
 
       - name: Upload APK
