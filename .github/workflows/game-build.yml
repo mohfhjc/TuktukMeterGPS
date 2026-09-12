@@ -1,17 +1,15 @@
-name: Setup Game and Build APK
+name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
     paths:
       - "TukTukEscape-first-version.zip"
-
-permissions:
-  contents: write
+      - ".github/workflows/game-build.yml"
+      - "game/**"
 
 jobs:
   setup-and-build:
-
     runs-on: ubuntu-latest
 
     container:
@@ -19,106 +17,92 @@ jobs:
 
     steps:
 
-      # ==============================
-      # Checkout
-      # ==============================
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      # ==============================
-      # Git permissions
-      # ==============================
-      - name: Configure Git
+      - name: Prepare Godot Android
+        shell: bash
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -e
 
-      # ==============================
-      # Extract ZIP
-      # ==============================
-      - name: Extract Game ZIP
-        run: |
+          echo "=== Set HOME ==="
+          export HOME=/root
+          echo "HOME=$HOME"
 
-          echo "Extracting game..."
+          echo "=== Prepare Godot config ==="
+          mkdir -p /root/.config/godot
+          mkdir -p /root/.local/share/godot/export_templates
 
-          rm -rf /tmp/tuktuk_game
-          rm -rf game/TukTukEscape
+          echo "=== Install export templates ==="
 
-          mkdir -p /tmp/tuktuk_game
-          mkdir -p game
-
-          unzip -o \
-            "TukTukEscape-first-version.zip" \
-            -d /tmp/tuktuk_game
-
-          echo "ZIP files:"
-          find /tmp/tuktuk_game -maxdepth 5 -type f
-
-          if [ -d "/tmp/tuktuk_game/game/TukTukEscape" ]; then
-
-            cp -r \
-              /tmp/tuktuk_game/game/TukTukEscape \
-              game/
-
-          elif [ -d "/tmp/tuktuk_game/TukTukEscape" ]; then
-
-            cp -r \
-              /tmp/tuktuk_game/TukTukEscape \
-              game/
-
-          else
-
-            echo "ERROR: Game folder not found!"
-            exit 1
-
+          if [ -d "/root/.local/share/godot/templates/4.6.3.stable" ]; then
+            rm -rf "/root/.local/share/godot/export_templates/4.6.3.stable"
+            mv "/root/.local/share/godot/templates/4.6.3.stable" \
+               "/root/.local/share/godot/export_templates/4.6.3.stable"
           fi
 
-      # ==============================
-      # Check project
-      # ==============================
-      - name: Check Project
-        run: |
+          echo "=== Configure Android SDK ==="
 
-          test -f game/TukTukEscape/project.godot
-          test -f game/TukTukEscape/Main.tscn
-          test -f game/TukTukEscape/scripts/main.gd
+          SETTINGS="/root/.config/godot/editor_settings-4.6.tres"
 
-          echo "Godot project OK."
+          touch "$SETTINGS"
 
-      # ==============================
-      # Configure Android
-      # ==============================
-      - name: Configure Android
-        run: |
+          sed -i '/export\/android\/java_sdk_path/d' "$SETTINGS" || true
+          sed -i '/export\/android\/android_sdk_path/d' "$SETTINGS" || true
+          sed -i '/export\/android\/debug_keystore/d' "$SETTINGS" || true
+          sed -i '/export\/android\/debug_keystore_user/d' "$SETTINGS" || true
+          sed -i '/export\/android\/debug_keystore_pass/d' "$SETTINGS" || true
 
-          echo "Java:"
+          cat >> "$SETTINGS" <<'EOF'
+          export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/debug_keystore = "/root/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+          echo "=== Java ==="
           java -version
 
-          echo "Godot:"
-          godot --version
+          echo "=== Android SDK ==="
+          ls -la /usr/lib/android-sdk
 
-          echo "Android SDK:"
-          echo "$ANDROID_HOME"
+          echo "=== Export templates ==="
+          ls -la /root/.local/share/godot/export_templates/ || true
 
-          echo "Build tools:"
-          sdkmanager --list | grep "build-tools" | head -10 || true
-
-          echo "Installed templates:"
-          find ~/.local/share/godot/export_templates \
-            -maxdepth 2 \
-            -type f \
-            | head -30
-
-      # ==============================
-      # Create proper Godot export preset
-      # ==============================
-      - name: Create Export Preset
+      - name: Extract Game
+        shell: bash
         run: |
+          set -e
 
-          cat > game/TukTukEscape/export_presets.cfg <<'EOF'
+          mkdir -p game/TukTukEscape
+
+          if [ -f "TukTukEscape-first-version.zip" ]; then
+            echo "Extracting game ZIP..."
+
+            rm -rf /tmp/tuktuk
+            mkdir -p /tmp/tuktuk
+
+            unzip -o "TukTukEscape-first-version.zip" -d /tmp/tuktuk
+
+            if [ -d "/tmp/tuktuk/game/TukTukEscape" ]; then
+              cp -rf /tmp/tuktuk/game/TukTukEscape/. game/TukTukEscape/
+            elif [ -d "/tmp/tuktuk/TukTukEscape" ]; then
+              cp -rf /tmp/tuktuk/TukTukEscape/. game/TukTukEscape/
+            fi
+          fi
+
+          echo "=== Game files ==="
+          find game/TukTukEscape -maxdepth 3 -type f | sort
+
+      - name: Configure Export Preset
+        shell: bash
+        run: |
+          set -e
+
+          cd game/TukTukEscape
+
+          cat > export_presets.cfg <<'EOF'
           [preset.0]
 
           name="Android Debug"
@@ -130,6 +114,11 @@ jobs:
           include_filter=""
           exclude_filter=""
           export_path=""
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+          script_export_mode=2
 
           [preset.0.options]
 
@@ -137,6 +126,9 @@ jobs:
           custom_template/release=""
 
           gradle_build/use_gradle_build=false
+          gradle_build/export_format=0
+          gradle_build/min_sdk="24"
+          gradle_build/target_sdk="33"
 
           architectures/armeabi-v7a=false
           architectures/arm64-v8a=true
@@ -148,14 +140,14 @@ jobs:
 
           package/unique_name="com.mohfjc.tuktukescape"
           package/name="TukTuk Escape"
-
           package/signed=true
 
+          package/app_category=2
           package/retain_data_on_uninstall=false
           package/exclude_from_recents=false
-
-          screen/immersive_mode=true
-          screen/orientation=1
+          package/show_in_android_tv=false
+          package/show_as_launcher_app=true
+          package/show_in_app_library=true
 
           launcher_icons/main_192x192=""
           launcher_icons/adaptive_foreground_432x432=""
@@ -165,6 +157,12 @@ jobs:
 
           xr_features/xr_mode=0
 
+          screen/immersive_mode=true
+          screen/support_small=true
+          screen/support_normal=true
+          screen/support_large=true
+          screen/support_xlarge=true
+
           user_data_backup/allow=false
 
           command_line/extra_args=""
@@ -173,104 +171,69 @@ jobs:
 
           permissions/custom_permissions=PackedStringArray()
 
-          permissions/access_checkin_properties=false
-          permissions/access_coarse_location=false
-          permissions/access_fine_location=false
-          permissions/access_network_state=true
-          permissions/access_notification_policy=false
-          permissions/access_wifi_state=true
-          permissions/add_always_on_display_description=false
-          permissions/add_instant_app=false
-          permissions/access_media_location=false
-          permissions/access_mock_location=false
-          permissions/access_mtp=false
-          permissions/access_overlay=false
-          permissions/access_phone_state=false
-          permissions/access_background_location=false
-          permissions/access_location_extra_commands=false
+          keystore/debug="/root/debug.keystore"
+          keystore/debug_user="androiddebugkey"
+          keystore/debug_password="android"
+
+          keystore/release=""
+          keystore/release_user=""
+          keystore/release_password=""
+
+          one_click_deploy/clear_previous_install=false
           EOF
 
-          echo "Export preset:"
-          cat game/TukTukEscape/export_presets.cfg
+          echo "=== Export preset ==="
+          cat export_presets.cfg
 
-      # ==============================
-      # Validate Godot project
-      # ==============================
-      - name: Validate Godot Project
+      - name: Validate Godot
+        shell: bash
         run: |
+          set -e
+
+          export HOME=/root
 
           cd game/TukTukEscape
 
-          godot \
-            --headless \
-            --editor \
-            --quit
+          godot --headless --path . --editor --quit
 
-      # ==============================
-      # Save project to GitHub
-      # ==============================
-      - name: Save Game
-        run: |
-
-          git add game/TukTukEscape
-
-          if git diff --cached --quiet; then
-
-            echo "Nothing to commit."
-
-          else
-
-            git commit \
-              -m "Add TukTuk Escape game project"
-
-            git push
-
-          fi
-
-      # ==============================
-      # Build APK
-      # ==============================
       - name: Build Android APK
+        shell: bash
         run: |
+          set -e
 
-          mkdir -p build/android
+          export HOME=/root
 
           cd game/TukTukEscape
+
+          mkdir -p ../../build/android
+
+          echo "=== Starting Android export ==="
 
           godot \
             --headless \
             --verbose \
+            --path . \
             --export-debug \
             "Android Debug" \
             "../../build/android/TukTukEscape-debug.apk"
 
-      # ==============================
-      # Check APK
-      # ==============================
+          echo "=== APK created ==="
+          ls -lh ../../build/android/
+
       - name: Check APK
+        shell: bash
         run: |
+          set -e
 
-          echo "Searching APK..."
+          if [ ! -f "build/android/TukTukEscape-debug.apk" ]; then
+            echo "APK was not created!"
+            exit 1
+          fi
 
-          find build \
-            -type f \
-            -name "*.apk" \
-            -print
+          ls -lh build/android/TukTukEscape-debug.apk
 
-          test -f \
-            build/android/TukTukEscape-debug.apk
-
-          echo "APK CREATED SUCCESSFULLY!"
-
-          ls -lh \
-            build/android/TukTukEscape-debug.apk
-
-      # ==============================
-      # Upload APK
-      # ==============================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TukTukEscape-APK
+          name: TukTukEscape-Android
           path: build/android/TukTukEscape-debug.apk
-          retention-days: 14
